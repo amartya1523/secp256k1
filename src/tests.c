@@ -1104,15 +1104,16 @@ static void signed30_to_uint16(uint16_t* out, const secp256k1_modinv32_signed30*
     }
 }
 
-/* Randomly mutate the sign of limbs in signed30 representation, without changing the value. */
+/* Randomly mutate the sign of limbs in signed30 representation, without changing the value.
+ * All limbs stay in range (-2^30,2^30). */
 static void mutate_sign_signed30(secp256k1_modinv32_signed30* x) {
     int i;
     for (i = 0; i < 16; ++i) {
         int pos = testrand_bits(3);
-        if (x->v[pos] > 0 && x->v[pos + 1] <= 0x3fffffff) {
+        if (x->v[pos] > 0 && x->v[pos + 1] < 0x3fffffff) {
             x->v[pos] -= 0x40000000;
             x->v[pos + 1] += 1;
-        } else if (x->v[pos] < 0 && x->v[pos + 1] >= 0x3fffffff) {
+        } else if (x->v[pos] < 0 && x->v[pos + 1] > -0x3fffffff) {
             x->v[pos] += 0x40000000;
             x->v[pos + 1] -= 1;
         }
@@ -1195,16 +1196,17 @@ static void signed62_to_uint16(uint16_t* out, const secp256k1_modinv64_signed62*
     }
 }
 
-/* Randomly mutate the sign of limbs in signed62 representation, without changing the value. */
+/* Randomly mutate the sign of limbs in signed62 representation, without changing the value.
+ * All limbs stay in range (-2^62,2^62). */
 static void mutate_sign_signed62(secp256k1_modinv64_signed62* x) {
     static const int64_t M62 = (int64_t)(UINT64_MAX >> 2);
     int i;
     for (i = 0; i < 8; ++i) {
         int pos = testrand_bits(2);
-        if (x->v[pos] > 0 && x->v[pos + 1] <= M62) {
+        if (x->v[pos] > 0 && x->v[pos + 1] < M62) {
             x->v[pos] -= (M62 + 1);
             x->v[pos + 1] += 1;
-        } else if (x->v[pos] < 0 && x->v[pos + 1] >= -M62) {
+        } else if (x->v[pos] < 0 && x->v[pos + 1] > -M62) {
             x->v[pos] += (M62 + 1);
             x->v[pos + 1] -= 1;
         }
