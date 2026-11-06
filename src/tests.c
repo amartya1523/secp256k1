@@ -1303,6 +1303,118 @@ static int coprime(const uint16_t* a, const uint16_t* b) {
     return 1;
 }
 
+#ifdef VERIFY
+/* Test that secp256k1_modinv32_modinfo_verify accepts valid modinfo structs and rejects invalid ones. */
+static void test_modinv32_modinfo_verify(void) {
+    static const int32_t M30 = (int32_t)(UINT32_MAX >> 2);
+    /* The field prime p = 2^256 - 2^32 - 977. */
+    static const secp256k1_modinv32_signed30 P = {{-0x3D1, -4, 0, 0, 0, 0, 0, 0, 65536}};
+    secp256k1_modinv32_modinfo m;
+    int i;
+
+    m.modulus = P;
+    m.modulus_inv30 = modinv2p64(m.modulus.v[0]) & M30;
+    CHECK(secp256k1_modinv32_modinfo_verify(&m));
+    /* Wrong inverse. */
+    m.modulus_inv30 ^= 2;
+    CHECK(!secp256k1_modinv32_modinfo_verify(&m));
+    /* Inverse not reduced mod 2^30. */
+    m.modulus_inv30 ^= 2 | ((uint32_t)1 << 30);
+    CHECK(!secp256k1_modinv32_modinfo_verify(&m));
+    /* Limb of 2^30, same value. */
+    m.modulus = P;
+    m.modulus_inv30 = modinv2p64(m.modulus.v[0]) & M30;
+    m.modulus.v[2] = 0x40000000;
+    m.modulus.v[3] = -1;
+    CHECK(!secp256k1_modinv32_modinfo_verify(&m));
+    /* Limb of -2^30, same value. */
+    m.modulus = P;
+    m.modulus.v[2] = -0x40000000;
+    m.modulus.v[3] = 1;
+    CHECK(!secp256k1_modinv32_modinfo_verify(&m));
+
+    /* Even modulus 2^256 - 2^32 - 978, which has no inverse mod 2^30. */
+    m.modulus = P;
+    m.modulus.v[0] -= 1;
+    CHECK(!secp256k1_modinv32_modinfo_verify(&m));
+
+    /* Smallest and largest allowed moduli: 3 and 2^256 - 1. */
+    memset(&m.modulus, 0, sizeof(m.modulus));
+    m.modulus.v[0] = 3;
+    m.modulus_inv30 = modinv2p64(3) & M30;
+    CHECK(secp256k1_modinv32_modinfo_verify(&m));
+    m.modulus.v[0] = 1;
+    m.modulus_inv30 = 1;
+    CHECK(!secp256k1_modinv32_modinfo_verify(&m));
+    for (i = 0; i < 8; ++i) m.modulus.v[i] = M30;
+    m.modulus.v[8] = 65535;
+    m.modulus_inv30 = modinv2p64(m.modulus.v[0]) & M30;
+    CHECK(secp256k1_modinv32_modinfo_verify(&m));
+    /* 2^256 + 1 is too large. */
+    memset(&m.modulus, 0, sizeof(m.modulus));
+    m.modulus.v[0] = 1;
+    m.modulus.v[8] = 65536;
+    m.modulus_inv30 = 1;
+    CHECK(!secp256k1_modinv32_modinfo_verify(&m));
+}
+
+#ifdef SECP256K1_WIDEMUL_INT128
+/* Test that secp256k1_modinv64_modinfo_verify accepts valid modinfo structs and rejects invalid ones. */
+static void test_modinv64_modinfo_verify(void) {
+    static const int64_t M62 = (int64_t)(UINT64_MAX >> 2);
+    /* The field prime p = 2^256 - 2^32 - 977. */
+    static const secp256k1_modinv64_signed62 P = {{-0x1000003D1LL, 0, 0, 0, 256}};
+    secp256k1_modinv64_modinfo m;
+    int i;
+
+    m.modulus = P;
+    m.modulus_inv62 = modinv2p64(m.modulus.v[0]) & M62;
+    CHECK(secp256k1_modinv64_modinfo_verify(&m));
+    /* Wrong inverse. */
+    m.modulus_inv62 ^= 2;
+    CHECK(!secp256k1_modinv64_modinfo_verify(&m));
+    /* Inverse not reduced mod 2^62. */
+    m.modulus_inv62 ^= 2 | ((uint64_t)1 << 62);
+    CHECK(!secp256k1_modinv64_modinfo_verify(&m));
+    /* Limb of 2^62, same value. */
+    m.modulus = P;
+    m.modulus_inv62 = modinv2p64(m.modulus.v[0]) & M62;
+    m.modulus.v[2] = M62 + 1;
+    m.modulus.v[3] = -1;
+    CHECK(!secp256k1_modinv64_modinfo_verify(&m));
+    /* Limb of -2^62, same value. */
+    m.modulus = P;
+    m.modulus.v[2] = -M62 - 1;
+    m.modulus.v[3] = 1;
+    CHECK(!secp256k1_modinv64_modinfo_verify(&m));
+
+    /* Even modulus 2^256 - 2^32 - 978, which has no inverse mod 2^62. */
+    m.modulus = P;
+    m.modulus.v[0] -= 1;
+    CHECK(!secp256k1_modinv64_modinfo_verify(&m));
+
+    /* Smallest and largest allowed moduli: 3 and 2^256 - 1. */
+    memset(&m.modulus, 0, sizeof(m.modulus));
+    m.modulus.v[0] = 3;
+    m.modulus_inv62 = modinv2p64(3) & M62;
+    CHECK(secp256k1_modinv64_modinfo_verify(&m));
+    m.modulus.v[0] = 1;
+    m.modulus_inv62 = 1;
+    CHECK(!secp256k1_modinv64_modinfo_verify(&m));
+    for (i = 0; i < 4; ++i) m.modulus.v[i] = M62;
+    m.modulus.v[4] = 255;
+    m.modulus_inv62 = modinv2p64(m.modulus.v[0]) & M62;
+    CHECK(secp256k1_modinv64_modinfo_verify(&m));
+    /* 2^256 + 1 is too large. */
+    memset(&m.modulus, 0, sizeof(m.modulus));
+    m.modulus.v[0] = 1;
+    m.modulus.v[4] = 256;
+    m.modulus_inv62 = 1;
+    CHECK(!secp256k1_modinv64_modinfo_verify(&m));
+}
+#endif
+#endif
+
 static void run_modinv_tests(void) {
     /* Fixed test cases. Each tuple is (input, modulus, output), each as 16x16 bits in LE order. */
     static const uint16_t CASES[][3][16] = {
@@ -1893,6 +2005,13 @@ static void run_modinv_tests(void) {
     };
 
     int i, j, ok;
+
+#ifdef VERIFY
+    test_modinv32_modinfo_verify();
+#ifdef SECP256K1_WIDEMUL_INT128
+    test_modinv64_modinfo_verify();
+#endif
+#endif
 
     /* Test known inputs/outputs */
     for (i = 0; (size_t)i < ARRAY_SIZE(CASES); ++i) {

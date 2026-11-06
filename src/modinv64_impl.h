@@ -79,6 +79,27 @@ static int secp256k1_modinv64_det_check_pow2(const secp256k1_modinv64_trans2x2 *
     if (abs && secp256k1_i128_check_pow2(&a, n, -1)) return 1;
     return 0;
 }
+
+/* Return 1 if modinfo satisfies the requirements stated in modinv64.h, i.e., the modulus is odd and
+ * in range [3,2^256], all its limbs are in range (-2^62,2^62), and modulus_inv62 is in range
+ * [0,2^62) and equal to modulus^{-1} mod 2^62. Return 0 otherwise. */
+static int secp256k1_modinv64_modinfo_verify(const secp256k1_modinv64_modinfo *modinfo) {
+    static const secp256k1_modinv64_signed62 THREE = {{3}};
+    static const secp256k1_modinv64_signed62 TWO256 = {{0, 0, 0, 0, 256}};
+    const int64_t M62 = (int64_t)(UINT64_MAX >> 2);
+    int i;
+
+    /* Check the limb range first, as secp256k1_modinv64_mul_cmp_62 below relies on it. */
+    for (i = 0; i < 5; ++i) {
+        if (modinfo->modulus.v[i] < -M62 || modinfo->modulus.v[i] > M62) return 0;
+    }
+    if (secp256k1_modinv64_mul_cmp_62(&modinfo->modulus, 5, &THREE, 1) < 0) return 0; /* modulus >= 3 */
+    if (secp256k1_modinv64_mul_cmp_62(&modinfo->modulus, 5, &TWO256, 1) > 0) return 0; /* modulus <= 2^256 */
+    if (modinfo->modulus_inv62 >> 62 != 0) return 0;
+    /* This also ensures that the modulus is odd, as an even number has no inverse mod 2^62. */
+    if (((modinfo->modulus_inv62 * (uint64_t)modinfo->modulus.v[0]) & (uint64_t)M62) != 1) return 0;
+    return 1;
+}
 #endif
 
 /* Take as input a signed62 number in range (-2*modulus,modulus), and add a multiple of the modulus
@@ -594,6 +615,8 @@ static void secp256k1_modinv64(secp256k1_modinv64_signed62 *x, const secp256k1_m
     int i;
     int64_t zeta = -1; /* zeta = -(delta+1/2); delta starts at 1/2. */
 
+    VERIFY_CHECK(secp256k1_modinv64_modinfo_verify(modinfo));
+
     /* Do 10 iterations of 59 divsteps each = 590 divsteps. This suffices for 256-bit inputs. */
     for (i = 0; i < 10; ++i) {
         /* Compute transition matrix and new zeta after 59 divsteps. */
@@ -646,6 +669,8 @@ static void secp256k1_modinv64_var(secp256k1_modinv64_signed62 *x, const secp256
     int j, len = 5;
     int64_t eta = -1; /* eta = -delta; delta is initially 1 */
     int64_t cond, fn, gn;
+
+    VERIFY_CHECK(secp256k1_modinv64_modinfo_verify(modinfo));
 
     /* Do iterations of 62 divsteps each until g=0. */
     while (1) {
@@ -727,6 +752,8 @@ static int secp256k1_jacobi64_maybe_var(const secp256k1_modinv64_signed62 *x, co
     int64_t cond, fn, gn;
     int jac = 0;
     int count;
+
+    VERIFY_CHECK(secp256k1_modinv64_modinfo_verify(modinfo));
 
     /* The input limbs must all be non-negative. */
     VERIFY_CHECK(g.v[0] >= 0 && g.v[1] >= 0 && g.v[2] >= 0 && g.v[3] >= 0 && g.v[4] >= 0);

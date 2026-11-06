@@ -54,6 +54,27 @@ static int secp256k1_modinv32_mul_cmp_30(const secp256k1_modinv32_signed30 *a, i
     }
     return 0;
 }
+
+/* Return 1 if modinfo satisfies the requirements stated in modinv32.h, i.e., the modulus is odd and
+ * in range [3,2^256], all its limbs are in range (-2^30,2^30), and modulus_inv30 is in range
+ * [0,2^30) and equal to modulus^{-1} mod 2^30. Return 0 otherwise. */
+static int secp256k1_modinv32_modinfo_verify(const secp256k1_modinv32_modinfo *modinfo) {
+    static const secp256k1_modinv32_signed30 THREE = {{3}};
+    static const secp256k1_modinv32_signed30 TWO256 = {{0, 0, 0, 0, 0, 0, 0, 0, 65536}};
+    const int32_t M30 = (int32_t)(UINT32_MAX >> 2);
+    int i;
+
+    /* Check the limb range first, as secp256k1_modinv32_mul_cmp_30 below relies on it. */
+    for (i = 0; i < 9; ++i) {
+        if (modinfo->modulus.v[i] < -M30 || modinfo->modulus.v[i] > M30) return 0;
+    }
+    if (secp256k1_modinv32_mul_cmp_30(&modinfo->modulus, 9, &THREE, 1) < 0) return 0; /* modulus >= 3 */
+    if (secp256k1_modinv32_mul_cmp_30(&modinfo->modulus, 9, &TWO256, 1) > 0) return 0; /* modulus <= 2^256 */
+    if (modinfo->modulus_inv30 >> 30 != 0) return 0;
+    /* This also ensures that the modulus is odd, as an even number has no inverse mod 2^30. */
+    if (((modinfo->modulus_inv30 * (uint32_t)modinfo->modulus.v[0]) & M30) != 1) return 0;
+    return 1;
+}
 #endif
 
 /* Take as input a signed30 number in range (-2*modulus,modulus), and add a multiple of the modulus
@@ -538,6 +559,8 @@ static void secp256k1_modinv32(secp256k1_modinv32_signed30 *x, const secp256k1_m
     int i;
     int32_t zeta = -1; /* zeta = -(delta+1/2); delta is initially 1/2. */
 
+    VERIFY_CHECK(secp256k1_modinv32_modinfo_verify(modinfo));
+
     /* Do 20 iterations of 30 divsteps each = 600 divsteps. 590 suffices for 256-bit inputs. */
     for (i = 0; i < 20; ++i) {
         /* Compute transition matrix and new zeta after 30 divsteps. */
@@ -590,6 +613,8 @@ static void secp256k1_modinv32_var(secp256k1_modinv32_signed30 *x, const secp256
     int j, len = 9;
     int32_t eta = -1; /* eta = -delta; delta is initially 1 (faster for the variable-time code) */
     int32_t cond, fn, gn;
+
+    VERIFY_CHECK(secp256k1_modinv32_modinfo_verify(modinfo));
 
     /* Do iterations of 30 divsteps each until g=0. */
     while (1) {
@@ -672,6 +697,8 @@ static int secp256k1_jacobi32_maybe_var(const secp256k1_modinv32_signed30 *x, co
     int32_t cond, fn, gn;
     int jac = 0;
     int count;
+
+    VERIFY_CHECK(secp256k1_modinv32_modinfo_verify(modinfo));
 
     /* The input limbs must all be non-negative. */
     VERIFY_CHECK(g.v[0] >= 0 && g.v[1] >= 0 && g.v[2] >= 0 && g.v[3] >= 0 && g.v[4] >= 0 && g.v[5] >= 0 && g.v[6] >= 0 && g.v[7] >= 0 && g.v[8] >= 0);

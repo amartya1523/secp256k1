@@ -21,10 +21,11 @@ typedef struct {
 } secp256k1_modinv64_signed62;
 
 typedef struct {
-    /* The modulus in signed62 notation, must be odd and in [3, 2^256]. */
+    /* The modulus in signed62 notation, must be odd and in [3, 2^256], with all limbs in
+     * range (-2^62,2^62). */
     secp256k1_modinv64_signed62 modulus;
 
-    /* modulus^{-1} mod 2^62 */
+    /* modulus^{-1} mod 2^62, in range [0,2^62) */
     uint64_t modulus_inv62;
 } secp256k1_modinv64_modinfo;
 

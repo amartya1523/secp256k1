@@ -17,10 +17,11 @@ typedef struct {
 } secp256k1_modinv32_signed30;
 
 typedef struct {
-    /* The modulus in signed30 notation, must be odd and in [3, 2^256]. */
+    /* The modulus in signed30 notation, must be odd and in [3, 2^256], with all limbs in
+     * range (-2^30,2^30). */
     secp256k1_modinv32_signed30 modulus;
 
-    /* modulus^{-1} mod 2^30 */
+    /* modulus^{-1} mod 2^30, in range [0,2^30) */
     uint32_t modulus_inv30;
 } secp256k1_modinv32_modinfo;
 
